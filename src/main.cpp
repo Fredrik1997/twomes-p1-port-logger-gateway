@@ -1,168 +1,183 @@
-/*********
-  Rui Santos
-  Complete project details at https://RandomNerdTutorials.com/esp-now-many-to-one-esp32/
-  
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files.
-  
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-*********/
-
 #include <esp_now.h>
 #include <WiFi.h>
-//#include <ArduinoJson.h>
-//#include <AsyncTCP/src/AsyncTCP.h>
-//#include <ESPAsyncWebServer.h>
+#include <Arduino.h>
 
+#define macArrayLength 6
 
-// Structure example to receive data
-// Must match the sender structure
-typedef struct struct_message
+#define testDevices 6
+#define receiveInterval 1005
+
+byte lastAddedNode = 0; //last node which registered at this gateway
+
+typedef struct esp_now_message
 {
-  int id;
-  int x;
-  int y;
-} struct_message;
+  byte macID[macArrayLength];
+  int temperature1;
+  int temperature2;
+} esp_now_message;
 
-// Create a struct_message called myData
-struct_message myData;
+esp_now_message node[testDevices];
 
-// Create a structure to hold the readings from each board
-struct_message board1;
-struct_message board2;
-struct_message board3;
+// esp_now_message node0, node1, node2, node3, node4, node5;
 
-// Create an array with all the structures
-struct_message boardsStruct[3] = {board1, board2, board3};
+// esp_now_message *nodes[testDevices] = {&node0, &node1, &node2, &node3, &node4, &node5};
 
-#define testDevices 5
-
-struct timing_communication
+struct communicationTests
 {
+  unsigned int missedCalls;
   unsigned long lastContact;
   unsigned long firstRegisterTime;
-  unsigned long downTime;
+  unsigned long averageInterval;
 };
 
-//JSONVar board;
+struct communicationTests nodeTests[testDevices];
 
-//AsyncWebServer server(80);
+typedef struct struct_message
+{
+  int temperature1;
+  int temperature2;
+} struct_message;
 
-//AsyncEventSource events("/events");
+struct_message myData;
 
-struct timing_communication node[testDevices];
+//prototype functions
+byte checkExistingMac(byte *pntToMac);
+void putMac(byte *pntToMac, byte selectedRow);
 
 // callback function that will be executed when data is received
 void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len)
 {
-  char macStr[18];
-  //Serial.print("Packet received from: ");
-  snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
-           mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-  //Serial.println(macStr);
-  memcpy(&myData, incomingData, sizeof(myData));
+  digitalWrite(LED_BUILTIN, HIGH);
+  // char macStr[18];
+  // Serial.print("Packet received from: ");
+  // snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
+  //          mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+  // Serial.println(macStr);
+  byte tempMac[macArrayLength] = {mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]};
 
-  if (node[myData.id].firstRegisterTime == 0) //(firstRegisterTime[myData.id] == 0)
+  //check if this mac matches with a existing macID
+  byte nodeNumber = checkExistingMac(tempMac);
+  if (nodeNumber == 255)
   {
-    node[myData.id].firstRegisterTime = millis();               //firstRegisterTime[myData.id]
-    node[myData.id].lastContact =node[myData.id].firstRegisterTime; //lastContact[myData.id] = firstRegisterTime[myData.id];
+    Serial.println("mac not in database yet");
+    putMac(tempMac, lastAddedNode);
+    nodeTests[lastAddedNode].firstRegisterTime = millis();
+    lastAddedNode++;
   }
-#define receiveInterval 1005
-  if (millis() - node[myData.id].lastContact > receiveInterval)
+  else
   {
-    Serial.print("Last receive interval was: ");
-    Serial.println((millis() - node[myData.id].lastContact)); /// 1000
-    node[myData.id].downTime += (millis() - node[myData.id].lastContact) - 1000; //downTime[myData.id]
-  }
-  node[myData.id].lastContact = millis();
+    long logTime = millis();
 
-  //Serial.printf("Board ID %u: %u bytes\n", myData.id, len);
-  // Update the structures with the new incoming data
-  boardsStruct[myData.id - 1].x = myData.x;
-  boardsStruct[myData.id - 1].y = myData.y;
-  Serial.printf("x value: %d \n", boardsStruct[myData.id - 1].x);
-  Serial.printf("y value: %d \n", boardsStruct[myData.id - 1].y);
-  Serial.println();
+    // Serial.printf("Node: %x is known\n", nodeNumber);
+    memcpy(&myData, incomingData, sizeof(myData));
+    // Serial.print("temperature1 = ");
+    // Serial.println(myData.temperature1);
+    // Serial.print("temperature2 = ");
+    // Serial.println(myData.temperature2);
+    if (myData.temperature1 != (node[nodeNumber].temperature1 + 1)) //if we missed a call
+    {
+      int difference = myData.temperature1 - node[nodeNumber].temperature1;
+      #define thresholdDifference 60
+      if (difference > thresholdDifference || difference < thresholdDifference)
+      {
+        Serial.printf("Differene = %i", difference);
+        Serial.println("difference to big, so not saved");
+      }
+      else
+      {
+        Serial.printf("missed calls: %i\n", difference);
+        nodeTests[nodeNumber].missedCalls += difference;
+      }
+    }
+    else
+    {
+      long interval = logTime - nodeTests[nodeNumber].lastContact;
+      nodeTests[nodeNumber].averageInterval += interval;
+      nodeTests[nodeNumber].averageInterval = nodeTests[nodeNumber].averageInterval / 2;    //average not calculated on a right way
+    }
+    nodeTests[nodeNumber].lastContact = logTime;
+    node[nodeNumber].temperature1 = myData.temperature1;
+    node[nodeNumber].temperature2 = myData.temperature2;
+  }
+  digitalWrite(LED_BUILTIN, LOW);
+}
+
+void putMac(byte *pntToMac, byte selectedRow)
+{
+  for (byte macTestFill = 0; macTestFill < macArrayLength; macTestFill++)
+  {
+    node[selectedRow].macID[macTestFill] = (*pntToMac + macTestFill);
+  }
+}
+
+//input:  pointer to mac address, byte array with 'macArrayLength' positions
+//output: 255: did not find existing node, 0-254 found existing node
+//effect: return existing node number if this exist, if not return 255
+byte checkExistingMac(byte *pntToMac)
+{
+  for (byte currentNode = 0; currentNode < testDevices; currentNode++)
+  {
+    //Serial.printf("currentNode = %i\n", currentNode);
+    for (byte macTestFill = 0; macTestFill < macArrayLength; macTestFill++)
+    {
+      // Serial.printf("macTestFill = %i\n", macTestFill);
+      // Serial.print("incoming: ");
+      // Serial.println(*pntToMac + macTestFill);
+      // Serial.printf("database: %i\n", nodes[currentNode]->macID[macTestFill]);
+      if (node[currentNode].macID[macTestFill] != (*pntToMac + macTestFill))
+      {
+        //Serial.println("wrong");
+        break;
+      }
+      else if (macTestFill == 5)
+      {
+        //Serial.println("good in last test");
+        return currentNode;
+      }
+    }
+  }
+  return 255;
 }
 
 void setup()
 {
-  //Initialize //Serial Monitor
   Serial.begin(115200);
-  Serial.println("active");
+  Serial.println("Serial active");
+  delay(10);
+  // for (byte macSearch = 0; macSearch < testDevices; macSearch++) //print macs from memory to monitor
+  // {
+  //   //Serial.print(node[macSearch].macID[1]);
+  //   Serial.printf("Node: %i has mac: ", macSearch);
+  //   Serial.printf("%02x:%02x:%02x:%02x:%02x:%02x\n", node[macSearch].macID[0], node[macSearch].macID[1], node[macSearch].macID[2], node[macSearch].macID[3], node[macSearch].macID[4], node[macSearch].macID[5]);
+  // }
+
+  // uint8_t macToTest[macArrayLength] = {4, 5, 6, 7, 8, 9};    //test for fucntino checkExistingMac
+  // Serial.printf("matching node : %x", checkExistingMac(macToTest));
 
   pinMode(LED_BUILTIN, OUTPUT);
-  //Set device as a Wi-Fi Station
-  WiFi.mode(WIFI_STA);
+  digitalWrite(LED_BUILTIN, LOW);
+  WiFi.mode(WIFI_STA); //Set device as a Wi-Fi Station
 
-  //Init ESP-NOW
-  if (esp_now_init() != ESP_OK)
+  if (esp_now_init() != ESP_OK) //Init ESP-NOW
   {
     Serial.println("Error initializing ESP-NOW");
     return;
   }
 
-  // Once ESPNow is successfully Init, we will register for recv CB to
-  // get recv packer info
-  esp_now_register_recv_cb(OnDataRecv);
-  digitalWrite(LED_BUILTIN, HIGH);
+  esp_now_register_recv_cb(OnDataRecv); // Once ESPNow is successfully Init, we will register for recv CB to, get recv packer info
 }
 
 void loop()
 {
-  // Acess the variables for each board
-  /*int board1X = boardsStruct[0].x;
-  int board1Y = boardsStruct[0].y;
-  int board2X = boardsStruct[1].x;
-  int board2Y = boardsStruct[1].y;
-  int board3X = boardsStruct[2].x;
-  int board3Y = boardsStruct[2].y;*/
-  for (byte testCount = 0; testCount < testDevices; testCount++)
+  for (byte testCount = 0; testCount < lastAddedNode; testCount++)
   {
-    if (node[testCount].firstRegisterTime != 0) //firstRegisterTime[testCount]
-    {
-      Serial.print(testCount);
-      Serial.print(". downtime = ");
-      Serial.print(node[testCount].downTime); //downTime[testCount]
-      Serial.print(", uptime vs. downtime = ");
-      Serial.print(float(100 - ((100 * node[testCount].downTime) / (millis() - node[testCount].firstRegisterTime)))); //firstRegisterTime[testCount]
-      Serial.println(" %");
-    }
-
-    if (node[testCount].lastContact == 0)//lastContact[testCount]
-    {
-      //Serial.print("Has never received something from device ");
-      //Serial.print(testCount);
-      //Serial.println("");
-    }
-    else if ((millis() - node[testCount].lastContact) > 1000)
-    {
-      //Serial.print("Last contact with device ");
-      //Serial.print(testCount);
-      //Serial.print(" was ");
-      //Serial.print((millis() - lastContact[testCount]) / 1000);
-      //Serial.println(" seconds ago.");
-      // if (digitalRead(LED_BUILTIN) == HIGH)
-      // {
-      //   digitalWrite(LED_BUILTIN, LOW);
-      // }
-    }
-    else
-    {
-      //Serial.print("Connection with device ");
-      //Serial.print(testCount);
-      //Serial.println(" stable");
-    }
-    // else if (digitalRead(LED_BUILTIN) == LOW)
-    // {
-    //   digitalWrite(LED_BUILTIN, HIGH);
-    // }
-    // if (testCount == testDevices)
-    // {
-    //   //Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
-    // }
+    Serial.printf("Node %i:\n", testCount);
+    Serial.printf("Last contact %lu microseconds ago\n", (millis() - nodeTests[testCount].lastContact));
+    Serial.printf("Missed calls %i\n", nodeTests[testCount].missedCalls);
+    Serial.printf("Registered %lu seconds ago\n", (millis() - nodeTests[testCount].firstRegisterTime) / 1000);
+    Serial.printf("Average interval time is %lu microseconds\n", nodeTests[testCount].averageInterval);
+    Serial.printf("----\n");
   }
-
+  Serial.println("-----------------------------");
   delay(5000);
 }
