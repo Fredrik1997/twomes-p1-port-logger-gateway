@@ -5,36 +5,36 @@
 #include <HTTPClient.h>
 #include <utils.h>
 
-#define macArrayLength 6      //number of position in a mac address
+#define macArrayLength 6 //number of position in a mac address
 
-#define testDevices 6         //maximum nodes
+#define testDevices 6 //maximum nodes
 
-#define sendInterval 30000    //sendinterval thingspeak 30 seconds
+#define sendInterval 30000 //sendinterval thingspeak 30 seconds
 
 byte lastAddedNode = 0; //last node which registered at this gateway
 
-unsigned long lastTimeSended = 0;   //to save what time (relative to millis) the last message to thingspeak was sent.
+unsigned long lastTimeSended = 0; //to save what time (relative to millis) the last message to thingspeak was sent.
 
-const char *ssid = userWiFiSSID;        //ssid internet access point, configure in utils.h
-const char *password = userWiFipassword;//password internet access point, configure in utils.h
+const char *ssid = userWiFiSSID;         //ssid internet access point, configure in utils.h
+const char *password = userWiFipassword; //password internet access point, configure in utils.h
 
 const char *serverName = userServerName; // Domain Name with full URL Path for HTTP POST Request, configure in utils.h
 String apiKey = userAPIkey;              // Service API Key, configure in utils.h
 
-typedef struct esp_now_message    //this is how data from a node is saved
+typedef struct esp_now_message //this is how data from a node is saved
 {
   byte macID[macArrayLength];
   int temperature1;
   int temperature2;
 } esp_now_message;
 
-esp_now_message node[testDevices];  //allocate memory for 'testDevices'
+esp_now_message node[testDevices]; //allocate memory for 'testDevices'
 
 // esp_now_message node0, node1, node2, node3, node4, node5;
 
 // esp_now_message *nodes[testDevices] = {&node0, &node1, &node2, &node3, &node4, &node5};
 
-struct communicationTests       //save this parameters for statics
+struct communicationTests //save this parameters for statics
 {
   unsigned int missedCalls;
   unsigned long lastContact;
@@ -45,7 +45,7 @@ struct communicationTests       //save this parameters for statics
 
 struct communicationTests nodeTests[testDevices];
 
-typedef struct struct_message   //this is how data is sended, REVIEW: this is possible on a different way
+typedef struct struct_message //this is how data is sended, REVIEW: this is possible on a different way
 {
   int temperature1;
   int temperature2;
@@ -99,7 +99,11 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len)
       }
       else
       {
-        Serial.printf("missed calls: %i\n", difference);
+        Serial.printf("missed calls: %i for node %x\n", difference, nodeNumber);
+        if (difference < 0)
+        {
+          difference *= -1;
+        }
         nodeTests[nodeNumber].missedCalls += difference;
       }
     }
@@ -195,7 +199,7 @@ void putMac(byte *pntToMac, byte selectedRow)
   }
 }
 
-//input:  
+//input:
 //output: false if something wrong, true if succeed
 //effect: sends defined parameters to ThingSpeak API
 boolean sendToThingSpeak()
@@ -227,6 +231,14 @@ boolean sendToThingSpeak()
   http.end();
   if (httpResponseCode == 200)
   {
+    nodeTests[0].missedCalls = 0;
+    nodeTests[1].missedCalls = 0;
+    nodeTests[2].missedCalls = 0;
+    nodeTests[3].missedCalls = 0;
+    nodeTests[0].totalCalls = 0;
+    nodeTests[1].totalCalls = 0;
+    nodeTests[2].totalCalls = 0;
+    nodeTests[3].totalCalls = 0;
     return true;
   }
   return false;
@@ -249,7 +261,6 @@ void printStatics()
   }
   Serial.println("-----------------------------");
 }
-
 
 //input:  pointer to mac address, byte array with 'macArrayLength' positions
 //output: 255: did not find existing node, 0-254 found existing node
