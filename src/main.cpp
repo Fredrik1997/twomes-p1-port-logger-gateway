@@ -185,7 +185,7 @@ boolean ESPnowconfig(boolean requestedState)
   {
     digitalWrite(measureTimePin1, LOW);
     WiFi.softAP("bullshit", "bulllshit", 1); //REVIEW: use this to change wifi radio channel, but this should be an other function
-    WiFi.mode(WIFI_STA);                     //REVIEW: check if this is necessarly
+    WiFi.mode(WIFI_STA);                     //REVIEW: check if this is necessary
     if (esp_now_init() == ESP_OK)
     {
       if (esp_now_register_recv_cb(OnDataRecv) == ESP_OK) // Once ESPNow is successfully Init, we will register for recv CB to, get recv packer info
@@ -324,18 +324,19 @@ void setup()
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
   WiFi.mode(WIFI_STA); //Set device as a Wi-Fi Station
-  ESPnowconfig(true);
+  //ESPnowconfig(true);
+  lastTimeSended = 1; //to execute function below direct
 }
 boolean buttonState1 = true;
 void loop()
 {
 
-  if (((millis() - lastTimeSended) > sendInterval) && buttonState1)
+  if (((millis() - lastTimeSended) > sendInterval)) // && buttonState1)
   {
     printStatics();
     if (buttonState1)
     {
-      ESPnowconfig(false);
+      //ESPnowconfig(false);
       WiFiconfig(true); //Serial.printf("WiFiconfig = %x", WiFiconfig(true));
       if (WiFi.status() == WL_CONNECTED)
       {
@@ -349,27 +350,27 @@ void loop()
         Serial.println("WiFi Disconnected");
       }
       //printStatics();
-      WiFiconfig(false);
-      ESPnowconfig(true);
+      //WiFiconfig(false);
+      //ESPnowconfig(true);
     }
   }
-  if ((digitalRead(button1) == LOW))
-  {
-    byte deBounce = 0;
-#define deBounceThreshold 50
-    while (deBounce < deBounceThreshold)
-    {
-      if (digitalRead(button1) == LOW)
-      {
-        deBounce = 0;
-      }
-      else
-      {
-        deBounce++;
-      }
-      delay(1);
-    }
-    buttonState1 = !buttonState1;
-    Serial.printf("toggle buttonState1 to %x\n", buttonState1);
-  }
+  //   if ((digitalRead(button1) == LOW))
+  //   {
+  //     byte deBounce = 0;
+  // #define deBounceThreshold 50
+  //     while (deBounce < deBounceThreshold)
+  //     {
+  //       if (digitalRead(button1) == LOW)
+  //       {
+  //         deBounce = 0;
+  //       }
+  //       else
+  //       {
+  //         deBounce++;
+  //       }
+  //       delay(1);
+  //     }
+  //     buttonState1 = !buttonState1;
+  //     Serial.printf("toggle buttonState1 to %x\n", buttonState1);
+  //   }
 }
