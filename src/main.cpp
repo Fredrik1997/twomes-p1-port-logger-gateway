@@ -24,7 +24,6 @@
 
 #include <WiFi.h>
 #include <Arduino.h>
-#include <WiFi.h>
 #include <HTTPClient.h>
 #include <utils.h>
 #include <ArduinoJWT.h>
