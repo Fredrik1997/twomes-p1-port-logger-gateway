@@ -13,8 +13,8 @@
 
 #define thresholdDifference 60
 
-#define measureTimePin1 12 //for debugging with scope
-#define measureTimePin2 27 //for debugging with scope
+#define measureTimePin1 27 //for debugging with scope
+#define measureTimePin2 12 //for debugging with scope
 #define button1 14         //for debugging with button on breadboard
 
 byte lastAddedNode = 0; //last node which registered at this gateway
@@ -183,9 +183,9 @@ boolean ESPnowconfig(boolean requestedState)
 {
   if (requestedState)
   {
-    digitalWrite(measureTimePin1, LOW);
-    WiFi.softAP("bullshit", "bulllshit", 1); //REVIEW: use this to change wifi radio channel, but this should be an other function
-    WiFi.mode(WIFI_STA);                     //REVIEW: check if this is necessary
+    //digitalWrite(measureTimePin1, LOW);
+    // WiFi.softAP("bullshit", "bulllshit", 1); //REVIEW: use this to change wifi radio channel, but this should be an other function
+    // WiFi.mode(WIFI_STA);                     //REVIEW: check if this is necessary
     if (esp_now_init() == ESP_OK)
     {
       if (esp_now_register_recv_cb(OnDataRecv) == ESP_OK) // Once ESPNow is successfully Init, we will register for recv CB to, get recv packer info
@@ -317,20 +317,38 @@ void setup()
   pinMode(measureTimePin1, OUTPUT);
   pinMode(measureTimePin2, OUTPUT);
   pinMode(button1, INPUT);
-
+  digitalWrite(measureTimePin1, LOW);
+  
   Serial.begin(115200);
   Serial.println("Serial active");
 
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
-  WiFi.mode(WIFI_STA); //Set device as a Wi-Fi Station
+  digitalWrite(measureTimePin1, HIGH);
+  WiFi.mode(WIFI_AP); //Set device as a Wi-Fi Station]
+  //WiFi.enableAP(false);
+  ESPnowconfig(true);
+  //WiFi.begin(ssid, password);
+  digitalWrite(measureTimePin1, LOW);
+  //WiFi.disconnect(false, false);
+  // Serial.print("WiFi.setTxPower = ");
+  // Serial.println(WiFi.setTxPower(WIFI_POWER_2dBm));
+  // Serial.print("WiFi tx power: ");
+  // Serial.println(WiFi.getTxPower());
+  for (int test = 50; test > 0; test--)
+  {
+    Serial.println(test);
+    delay(200);
+  }
   //ESPnowconfig(true);
-  lastTimeSended = 1; //to execute function below direct
+  //lastTimeSended = 1; //to execute function below direct
 }
 boolean buttonState1 = true;
 void loop()
 {
-
+  while (true)
+  {
+  }
   if (((millis() - lastTimeSended) > sendInterval)) // && buttonState1)
   {
     printStatics();
