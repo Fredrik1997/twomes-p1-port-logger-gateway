@@ -311,25 +311,36 @@ byte checkExistingMac(byte *pntToMac)
   }
   return 255;
 }
-
+boolean startRemember = false;
 void setup()
 {
+  // pinMode(measureTimePin1, OUTPUT);
+  // digitalWrite(measureTimePin1, HIGH);
+  // esp_sleep_enable_timer_wakeup(1500000); //wait one second to charge capacitor
+  // esp_light_sleep_start();
   pinMode(measureTimePin1, OUTPUT);
   pinMode(measureTimePin2, OUTPUT);
   pinMode(button1, INPUT);
-  digitalWrite(measureTimePin1, LOW);
-  
-  Serial.begin(115200);
-  Serial.println("Serial active");
+  // digitalWrite(measureTimePin1, LOW);
 
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
+  WiFi.mode(WIFI_STA); //Set device as a Wi-Fi Station]
+  esp_sleep_enable_timer_wakeup(1500000); //wait one second to charge capacitor
+  esp_light_sleep_start();  
   digitalWrite(measureTimePin1, HIGH);
-  WiFi.mode(WIFI_AP); //Set device as a Wi-Fi Station]
+  WiFi.begin(ssid, password);  
+  Serial.begin(115200);
+  Serial.println("Serial active");
+  Serial.println("overleeft");
   //WiFi.enableAP(false);
-  ESPnowconfig(true);
+  //ESPnowconfig(true);
   //WiFi.begin(ssid, password);
-  digitalWrite(measureTimePin1, LOW);
+  //digitalWrite(measureTimePin1, LOW);
+  while (1)
+  {
+    delay(1);
+  }
   //WiFi.disconnect(false, false);
   // Serial.print("WiFi.setTxPower = ");
   // Serial.println(WiFi.setTxPower(WIFI_POWER_2dBm));
