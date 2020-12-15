@@ -3,7 +3,7 @@
 #include <BLEUtils.h>
 #include <BLEServer.h>
 #include <WiFi.h>
-#include <BLE_UUIDs.h>
+#include <BLE_Twomes.h>
 
 class CallbacksFrom_STATE_WIFI_CHAR : public BLECharacteristicCallbacks
 {
@@ -89,22 +89,22 @@ void setup()
 {
     Serial.begin(115200);
 
-    uint64_t chipid = ESP.getEfuseMac();
+    uint64_t chipid = ESP.getEfuseMac();    //get ESP32 chip id, as long long unsigned integer
     // Serial.print("unique id: ");
     // Serial.printf("%llu\n", chipid);
 
-#define numberOfUniqueDigits 14
+#define numberOfUniqueDigits 14 //this is the lenght of chipid, see above
 
-    char BLE_name[12 + numberOfUniqueDigits] = "Twomes";
-    Serial.print("BLE_name: ");
-    Serial.println(BLE_name);
-    char BLE_unique[numberOfUniqueDigits];
-    sprintf(BLE_unique, "%llu", chipid);
-    strcat(BLE_name, BLE_unique);
-    Serial.print("BLE_name: ");
-    Serial.println(BLE_name);
+    char BLE_name[12 + numberOfUniqueDigits] = hardcoded_BLE_name;        //declare variable for BLE name and add first section of name.
+    // Serial.print("BLE_name: ");
+    // Serial.println(BLE_name);
+    char BLE_unique[numberOfUniqueDigits];      //review this, this step can maybe optimized. declare variable for translation
+    sprintf(BLE_unique, "%llu", chipid);        //translate chipid to BLE-unique
+    strcat(BLE_name, BLE_unique);               //add BLE_unique to BLE_name
+    // Serial.print("BLE_name: ");
+    // Serial.println(BLE_name);
 
-    BLEDevice::init(BLE_name);
+    BLEDevice::init(BLE_name);                  //init Device with builded name char
 
     BLEServer *pServer = BLEDevice::createServer();
 
@@ -113,17 +113,17 @@ void setup()
     BLECharacteristic *SSID_WIFI_CHAR = WIFI_PROVISIONING_SERVICE->createCharacteristic(
         SSID_WIFI_CHAR_UUID,
         BLECharacteristic::PROPERTY_WRITE);
-    SSID_WIFI_CHAR->setValue("thisWillBeTheLenght");
+    SSID_WIFI_CHAR->setValue("thisWillBeTheLenght"); //review this, needed for memory allocation?
 
     BLECharacteristic *PASSWORD_WIFI_CHAR = WIFI_PROVISIONING_SERVICE->createCharacteristic(
         PASSWORD_WIFI_UUID,
         BLECharacteristic::PROPERTY_WRITE);
-    PASSWORD_WIFI_CHAR->setValue("thisWillBeTheLenght");
+    PASSWORD_WIFI_CHAR->setValue("thisWillBeTheLenght"); //review this, needed for memory allocation?
 
     BLECharacteristic *STATE_WIFI_CHAR = WIFI_PROVISIONING_SERVICE->createCharacteristic(
         STATE_WIFI_UUID,
         BLECharacteristic::PROPERTY_READ);
-    STATE_WIFI_CHAR->setValue("thisWillBeTheLenght");
+    STATE_WIFI_CHAR->setValue("thisWillBeTheLenght"); //review this, needed for memory allocation?
 
     BLEService *CONFIG_PROVISIONING_SERVICE = pServer->createService(CONFIG_PROVISIONING_SERVICE_UUID);
 
@@ -136,29 +136,34 @@ void setup()
     BLECharacteristic *MEASURE_INTERVAL_CHAR = CONFIG_PROVISIONING_SERVICE->createCharacteristic(
         MEASURE_INTERVAL_CHAR_UUID,
         BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_READ);
-    MEASURE_INTERVAL_CHAR->setValue("thisWillBeTheLenght");
+    MEASURE_INTERVAL_CHAR->setValue("thisWillBeTheLenght"); //review this, needed for memory allocation? 
 
-    WIFI_PROVISIONING_SERVICE->start();
+    WIFI_PROVISIONING_SERVICE->start();         //start service
     CONFIG_PROVISIONING_SERVICE->start();
 
     BLEAdvertising *pAdvertising = pServer->getAdvertising(); // this still is working for backward compatibility
+
     //BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-    pAdvertising->addServiceUUID(WIFI_PROVISIONING_SERVICE_UUID);
-    pAdvertising->addServiceUUID(CONFIG_PROVISIONING_SERVICE_UUID);
-    pAdvertising->setScanResponse(true);
-    pAdvertising->setMinPreferred(0x06); // functions that help with iPhone connections issue
-    pAdvertising->setMinPreferred(0x12);
-    BLEDevice::startAdvertising();
-    BLEDevice::setPower(ESP_PWR_LVL_N12);
+
+    pAdvertising->addServiceUUID(WIFI_PROVISIONING_SERVICE_UUID);   //review this, maybe not required in our case. advertise with argumented service
+    pAdvertising->addServiceUUID(CONFIG_PROVISIONING_SERVICE_UUID); //review this, maybe not required in our case. advertise with argumented service
+
+    pAdvertising->setScanResponse(true);    //review this?
+    pAdvertising->setMinPreferred(0x06);    //review this, functions that help with iPhone connections issue
+    pAdvertising->setMinPreferred(0x12);    //review this?
+
+    BLEDevice::startAdvertising();          //advertise with BLE server settings
+
+    BLEDevice::setPower(ESP_PWR_LVL_N12); //to minimize antenna power
 
     //BLECharacteristicCallbacks pCharacteristicsCallback = new BLECharacteristicCallbacks();
 
-    SSID_WIFI_CHAR->setCallbacks(new CallbacksFrom_SSID_WIFI_CHAR());
-    PASSWORD_WIFI_CHAR->setCallbacks(new CallbacksFrom_PASSWORD_WIFI_CHAR());
-    STATE_WIFI_CHAR->setCallbacks(new CallbacksFrom_STATE_WIFI_CHAR());
+    SSID_WIFI_CHAR->setCallbacks(new CallbacksFrom_SSID_WIFI_CHAR());           //config callbacks
+    PASSWORD_WIFI_CHAR->setCallbacks(new CallbacksFrom_PASSWORD_WIFI_CHAR());   //config callbacks
+    STATE_WIFI_CHAR->setCallbacks(new CallbacksFrom_STATE_WIFI_CHAR());         //config callbacks
 
-    UNIQUE_ID_CHAR->setCallbacks(new CallbacksFrom_UNIQUE_ID_CHAR());
-    MEASURE_INTERVAL_CHAR->setCallbacks(new CallbacksFrom_MEASURE_INTERVAL_CHAR());
+    UNIQUE_ID_CHAR->setCallbacks(new CallbacksFrom_UNIQUE_ID_CHAR());           //config callbacks
+    MEASURE_INTERVAL_CHAR->setCallbacks(new CallbacksFrom_MEASURE_INTERVAL_CHAR());//config callbacks
 }
 
 void loop()
