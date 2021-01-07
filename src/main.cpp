@@ -4,6 +4,7 @@
 #include <BLEServer.h>
 #include <WiFi.h>
 #include <BLE_Twomes.h>
+//#include <BLE2902.h>
 
 uint8_t testDing1 = 0;
 
@@ -57,24 +58,31 @@ class CallbacksFrom_PASSWORD_WIFI_CHAR : public BLECharacteristicCallbacks
 
 class CallbacksFrom_UNIQUE_ID_GATEWAY_CHAR : public BLECharacteristicCallbacks
 {
+    void onRead(BLECharacteristic *UNIQUE_ID_GATEWAY_CHAR)
+    {
+        Serial.println("Unique ID GATEWAY readed");
+    };
+
     void onWrite(BLECharacteristic *UNIQUE_ID_GATEWAY_CHAR)
     {
-        //        UNIQUE_ID_BOILER_CHAR->notify();
-        Serial.println("Unique ID GATEWAY readed");
+        Serial.println("Unique ID GATEWAY writed");
     };
 };
 
 class CallbacksFrom_UNIQUE_ID_BOILER_CHAR : public BLECharacteristicCallbacks
 {
-    void onWrite(BLECharacteristic *UNIQUE_ID_BOILER_CHAR)
+    void onRead(BLECharacteristic *UNIQUE_ID_BOILER_CHAR)
     {
-        testDing1 = 1;
-        Serial.println("Unique ID BOILER writed");
+        Serial.println("Unique ID BOILER readed");
     };
 };
 
 class CallbacksFrom_UNIQUE_ID_ROOM_CHAR : public BLECharacteristicCallbacks
 {
+    void onRead(BLECharacteristic *UNIQUE_ID_ROOM_CHAR)
+    {
+        Serial.println("Unique ID ROOM readed");
+    };
     void onWrite(BLECharacteristic *UNIQUE_ID_ROOM_CHAR)
     {
         testDing1 = 2;
@@ -157,15 +165,17 @@ void setup()
 
     BLECharacteristic *UNIQUE_ID_BOILER_CHAR = CONFIG_PROVISIONING_SERVICE->createCharacteristic(
         UNIQUE_ID_BOILER_CHAR_UUID,
-        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_INDICATE | BLECharacteristic::PROPERTY_WRITE);
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE);//BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_INDICATE | 
     //UNIQUE_ID_CHAR->setValue((WiFi.macAddress());
     UNIQUE_ID_BOILER_CHAR->setValue("4e:43:a8:f6:73:32"); //see above
+    //UNIQUE_ID_BOILER_CHAR->addDescriptor(new BLE2902());
 
     BLECharacteristic *UNIQUE_ID_ROOM_CHAR = CONFIG_PROVISIONING_SERVICE->createCharacteristic(
         UNIQUE_ID_ROOM_CHAR_UUID,
-        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_INDICATE | BLECharacteristic::PROPERTY_WRITE);
+        BLECharacteristic::PROPERTY_READ |  BLECharacteristic::PROPERTY_WRITE);//BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_INDICATE |
     //UNIQUE_ID_CHAR->setValue((WiFi.macAddress());
     UNIQUE_ID_ROOM_CHAR->setValue("4e:43:a8:f6:73:32"); //see above
+    //UNIQUE_ID_ROOM_CHAR->addDescriptor(new BLE2902());
 
     BLECharacteristic *MEASURE_INTERVAL_CHAR = CONFIG_PROVISIONING_SERVICE->createCharacteristic(
         MEASURE_INTERVAL_CHAR_UUID,
