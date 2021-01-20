@@ -1,31 +1,31 @@
 #include <esp_now.h>
 #include <WiFi.h>
 #include <Arduino.h>
-#include <WiFi.h>
 #include <HTTPClient.h>
 #include <utils.h>
+#include <espnow_settings.h>
 
 #define macArrayLength 6 //number of position in a mac address
 
-#define testDevices 6 //maximum nodes
+#define maximumExternalSensors 6 //maximum nodes
 
 #define sendInterval 10000 //sendinterval thingspeak 30 seconds
 
 #define thresholdDifference 60
 
-#define measureTimePin1 27 //for debugging with scope
-#define measureTimePin2 12 //for debugging with scope
-#define button1 14         //for debugging with button on breadboard
-
 byte lastAddedNode = 0; //last node which registered at this gateway
 
 unsigned long lastTimeSended = 0; //to save what time (relative to millis) the last message to thingspeak was sent.
 
-const char *ssid = userWiFiSSID;         //ssid internet access point, configure in utils.h
-const char *password = userWiFipassword; //password internet access point, configure in utils.h
+typedef struct ESP_message
+{
+  uint8_t numberofMeasurements;
+  uint8_t intervalTime = defaultIntervalTime; //(INTERVAL_US / 1000000); //intervalTime in milliSeconds
+  float pipeTemps1[maximum_samples_espnow];
+  float pipeTemps2[maximum_samples_espnow];
+} ESP_message;
 
-const char *serverName = userServerName; // Domain Name with full URL Path for HTTP POST Request, configure in utils.h
-String apiKey = userAPIkey;              // Service API Key, configure in utils.h
+ESP_message receivedMessage[maximumExternalSensors];
 
 typedef struct esp_now_message //this is how data from a node is saved
 {
@@ -34,11 +34,11 @@ typedef struct esp_now_message //this is how data from a node is saved
   int temperature2;
 } esp_now_message;
 
-esp_now_message node[testDevices]; //allocate memory for 'testDevices'
+esp_now_message node[maximumExternalSensors]; //allocate memory for 'maximumExternalSensors'
 
 // esp_now_message node0, node1, node2, node3, node4, node5;
 
-// esp_now_message *nodes[testDevices] = {&node0, &node1, &node2, &node3, &node4, &node5};
+// esp_now_message *nodes[maximumExternalSensors] = {&node0, &node1, &node2, &node3, &node4, &node5};
 
 struct communicationStatics //save this parameters for statics
 {
@@ -49,7 +49,7 @@ struct communicationStatics //save this parameters for statics
   unsigned long totalCalls;
 };
 
-struct communicationStatics nodeStatics[testDevices];
+struct communicationStatics nodeStatics[maximumExternalSensors];
 
 typedef struct struct_message //this is how data is sended, REVIEW: this is possible on a different way
 {
@@ -65,65 +65,81 @@ byte checkExistingMac(byte *pntToMac);
 void putMac(byte *pntToMac, byte selectedRow);
 boolean ESPnowconfig(boolean requestedState);
 
+#define mac_does_not_exist 255
+
+#define debug_sent_ESPNOW_message 1
+#define temp_select_device 0
 // callback function that will be executed when data is received
 void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len)
 {
-  digitalWrite(LED_BUILTIN, HIGH);
-  // char macStr[18];
-  // Serial.print("Packet received from: ");
-  // snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
-  //          mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-  // Serial.println(macStr);
-  byte tempMac[macArrayLength] = {mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]};
+  char macStr[18];
+  Serial.print("Packet received from: ");
+  snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
+           mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+  Serial.println(macStr);
 
-  //check if this mac matches with a existing macID
-  byte nodeNumber = checkExistingMac(tempMac);
-  if (nodeNumber == 255)
-  {
-    Serial.println("mac not in database yet");
-    putMac(tempMac, lastAddedNode);
-    nodeStatics[lastAddedNode].firstRegisterTime = millis();
-    lastAddedNode++;
-  }
-  else
-  {
-    long logTime = millis();
+  memcpy(&receivedMessage[temp_select_device], incomingData, sizeof(receivedMessage[temp_select_device]));
 
-    // Serial.printf("Node: %x is known\n", nodeNumber);
-    memcpy(&myData, incomingData, sizeof(myData));
-    // Serial.print("temperature1 = ");
-    // Serial.println(myData.temperature1);
-    // Serial.print("temperature2 = ");
-    // Serial.println(myData.temperature2);
-    if (myData.temperature1 != (node[nodeNumber].temperature1 + 1)) //if we missed a call
-    {
-      int difference = myData.temperature1 - node[nodeNumber].temperature1;
-      if ((difference > thresholdDifference) || ((difference * -1) > thresholdDifference))
-      {
-        Serial.printf("Differene : %i for node %x\n", difference, nodeNumber);
-      }
-      else
-      {
-        Serial.printf("missed calls: %i for node %x\n", difference, nodeNumber);
-        if (difference < 0)
-        {
-          difference *= -1;
-        }
-        nodeStatics[nodeNumber].missedCalls += difference;
-      }
-    }
-    else
-    {
-      unsigned long interval = logTime - nodeStatics[nodeNumber].lastContact;
-      RollingAverage(&nodeStatics[nodeNumber].averageInterval, &interval, &nodeStatics[nodeNumber].totalCalls);
-      Serial.printf("Result average: %lu\n", nodeStatics[nodeNumber].averageInterval);
-      nodeStatics[nodeNumber].totalCalls++;
-    }
-    nodeStatics[nodeNumber].lastContact = logTime;
-    node[nodeNumber].temperature1 = myData.temperature1;
-    node[nodeNumber].temperature2 = myData.temperature2;
+#if debug_sent_ESPNOW_message
+  printf("[ESPNOW]: receivedMessage[temp_select_device].numberofMeasurements = %u\n", receivedMessage[temp_select_device].numberofMeasurements);
+  printf("[ESPNOW]: receivedMessage[temp_select_device].intervalTime = %u\n", receivedMessage[temp_select_device].intervalTime);
+  for (uint8_t counter1 = 0; counter1 < receivedMessage[temp_select_device].numberofMeasurements; counter1++)
+  {
+    printf("[ESPNOW]: receivedMessage[temp_select_device].pipeTemps1[%u] = %f\n", counter1, receivedMessage[temp_select_device].pipeTemps1[counter1]);
+    printf("[ESPNOW]: receivedMessage[temp_select_device].pipeTemps2[%u] = %f\n", counter1, receivedMessage[temp_select_device].pipeTemps2[counter1]);
   }
-  digitalWrite(LED_BUILTIN, LOW);
+  printf("[ESPNOW]: This should be the message\n");
+#endif
+
+  // byte tempMac[macArrayLength] = {mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]};
+
+  // //check if this mac matches with a existing macID
+  // byte nodeNumber = checkExistingMac(tempMac);
+  // if (nodeNumber == mac_does_not_exist)
+  // {
+  //   Serial.println("mac not in database yet");
+  //   putMac(tempMac, lastAddedNode);
+  //   nodeStatics[lastAddedNode].firstRegisterTime = millis();
+  //   lastAddedNode++;
+  // }
+  // else
+  // {
+  //   long logTime = millis();
+
+  //   // Serial.printf("Node: %x is known\n", nodeNumber);
+  //   memcpy(&myData, incomingData, sizeof(myData));
+  //   // Serial.print("temperature1 = ");
+  //   // Serial.println(myData.temperature1);
+  //   // Serial.print("temperature2 = ");
+  //   // Serial.println(myData.temperature2);
+  //   if (myData.temperature1 != (node[nodeNumber].temperature1 + 1)) //if we missed a call
+  //   {
+  //     int difference = myData.temperature1 - node[nodeNumber].temperature1;
+  //     if ((difference > thresholdDifference) || ((difference * -1) > thresholdDifference))
+  //     {
+  //       Serial.printf("Differene : %i for node %x\n", difference, nodeNumber);
+  //     }
+  //     else
+  //     {
+  //       Serial.printf("missed calls: %i for node %x\n", difference, nodeNumber);
+  //       if (difference < 0)
+  //       {
+  //         difference *= -1;
+  //       }
+  //       nodeStatics[nodeNumber].missedCalls += difference;
+  //     }
+  //   }
+  //   else
+  //   {
+  //     unsigned long interval = logTime - nodeStatics[nodeNumber].lastContact;
+  //     RollingAverage(&nodeStatics[nodeNumber].averageInterval, &interval, &nodeStatics[nodeNumber].totalCalls);
+  //     Serial.printf("Result average: %lu\n", nodeStatics[nodeNumber].averageInterval);
+  //     nodeStatics[nodeNumber].totalCalls++;
+  //   }
+  //   nodeStatics[nodeNumber].lastContact = logTime;
+  //   node[nodeNumber].temperature1 = myData.temperature1;
+  //   node[nodeNumber].temperature2 = myData.temperature2;
+  // }
 }
 
 void RollingAverage(unsigned long *avg, unsigned long *new_sample, unsigned long *numberofSamples)
@@ -141,40 +157,38 @@ void RollingAverage(unsigned long *avg, unsigned long *new_sample, unsigned long
 //input:  requested state of WiFi communication
 //output: true if succeed, otherwise false
 //effect: sets WiFi communication in requested state
-boolean WiFiconfig(boolean requestedState)
-{
-  if (requestedState)
-  {
-    // Serial.print("Wi-Fi Channel: ");
-    // Serial.println(WiFi.channel());
-    digitalWrite(measureTimePin2, HIGH);
-    WiFi.begin(ssid, password, 3);
-    digitalWrite(measureTimePin2, LOW);
-    //Serial.println("Connecting");
-    while (WiFi.status() != WL_CONNECTED)
-    {
-      delay(1);
-      //Serial.print(".");
-    }
-    // Serial.println("");
-    // Serial.print("Connected to WiFi network with IP Address: ");
-    // Serial.println(WiFi.localIP());
-    if (WiFi.status() == WL_CONNECTED)
-    {
-      // Serial.print("Wi-Fi Channel: ");
-      // Serial.println(WiFi.channel());
-      return true;
-    }
-  }
-  else
-  {
-    if (WiFi.disconnect(true, true) == 1)
-    {
-      return true;
-    }
-  }
-  return false;
-}
+// boolean WiFiconfig(boolean requestedState)
+// {
+//   if (requestedState)
+//   {
+//     // Serial.print("Wi-Fi Channel: ");
+//     // Serial.println(WiFi.channel());
+//     WiFi.begin(ssid, password, 3);
+//     //Serial.println("Connecting");
+//     while (WiFi.status() != WL_CONNECTED)
+//     {
+//       delay(1);
+//       //Serial.print(".");
+//     }
+//     // Serial.println("");
+//     // Serial.print("Connected to WiFi network with IP Address: ");
+//     // Serial.println(WiFi.localIP());
+//     if (WiFi.status() == WL_CONNECTED)
+//     {
+//       // Serial.print("Wi-Fi Channel: ");
+//       // Serial.println(WiFi.channel());
+//       return true;
+//     }
+//   }
+//   else
+//   {
+//     if (WiFi.disconnect(true, true) == 1)
+//     {
+//       return true;
+//     }
+//   }
+//   return false;
+// }
 
 //input:  requested state of ESP-NOW communication
 //output: true if succeed, otherwise false
@@ -184,8 +198,8 @@ boolean ESPnowconfig(boolean requestedState)
   if (requestedState)
   {
     //digitalWrite(measureTimePin1, LOW);
-    // WiFi.softAP("bullshit", "bulllshit", 1); //REVIEW: use this to change wifi radio channel, but this should be an other function
-    // WiFi.mode(WIFI_STA);                     //REVIEW: check if this is necessary
+    //WiFi.softAP("bullshit", "bulllshit", espnow_channel); //REVIEW: use this to change wifi radio channel, but this should be an other function
+    WiFi.mode(WIFI_STA); //REVIEW: check if this is necessary
     if (esp_now_init() == ESP_OK)
     {
       if (esp_now_register_recv_cb(OnDataRecv) == ESP_OK) // Once ESPNow is successfully Init, we will register for recv CB to, get recv packer info
@@ -196,7 +210,6 @@ boolean ESPnowconfig(boolean requestedState)
   }
   else
   {
-    digitalWrite(measureTimePin1, HIGH);
     if (esp_now_unregister_recv_cb() == ESP_OK)
     {
       if (esp_now_deinit() == ESP_OK)
@@ -220,51 +233,6 @@ void putMac(byte *pntToMac, byte selectedRow)
   }
 }
 
-//input:
-//output: false if something wrong, true if succeed
-//effect: sends defined parameters to ThingSpeak API
-boolean sendToThingSpeak()
-{
-  HTTPClient http;
-  if (!http.begin(serverName))
-  {
-    return false;
-  }
-  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-
-  String httpRequestData = "api_key=" + apiKey +
-                           "&field1=" + String(nodeStatics[0].missedCalls) +
-                           "&field2=" + String(nodeStatics[0].totalCalls) +
-                           "&field3=" + String(nodeStatics[1].missedCalls) +
-                           "&field4=" + String(nodeStatics[1].totalCalls) +
-                           "&field5=" + String(nodeStatics[2].missedCalls) +
-                           "&field6=" + String(nodeStatics[2].totalCalls) +
-                           "&field7=" + String(nodeStatics[3].missedCalls) +
-                           "&field8=" + String(nodeStatics[3].totalCalls);
-
-  int httpResponseCode = http.POST(httpRequestData);
-  // Serial.print("httpRequestData : ");
-  // Serial.println(httpRequestData);
-
-  // Serial.print("HTTP Response code: ");
-  // Serial.println(httpResponseCode);
-
-  http.end();
-  if (httpResponseCode == 200)
-  {
-    nodeStatics[0].missedCalls = 0;
-    nodeStatics[1].missedCalls = 0;
-    nodeStatics[2].missedCalls = 0;
-    nodeStatics[3].missedCalls = 0;
-    nodeStatics[0].totalCalls = 0;
-    nodeStatics[1].totalCalls = 0;
-    nodeStatics[2].totalCalls = 0;
-    nodeStatics[3].totalCalls = 0;
-    return true;
-  }
-  return false;
-}
-
 //input:  nothing
 //output: nothing
 //effect: returns statics from active nodes to serial monitor
@@ -284,11 +252,11 @@ void printStatics()
 }
 
 //input:  pointer to mac address, byte array with 'macArrayLength' positions
-//output: 255: did not find existing node, 0-254 found existing node
-//effect: return existing node number if this exist, if not return 255
+//output: "mac_does_not_exist": did not find existing node, 0-254 found existing node
+//effect: return existing node number if this exist, if not return "mac_does_not_exist"
 byte checkExistingMac(byte *pntToMac)
 {
-  for (byte currentNode = 0; currentNode < testDevices; currentNode++)
+  for (byte currentNode = 0; currentNode < maximumExternalSensors; currentNode++)
   {
     //Serial.printf("currentNode = %i\n", currentNode);
     for (byte macTestFill = 0; macTestFill < macArrayLength; macTestFill++)
@@ -309,97 +277,62 @@ byte checkExistingMac(byte *pntToMac)
       }
     }
   }
-  return 255;
+  return mac_does_not_exist;
 }
+
 boolean startRemember = false;
+
 void setup()
 {
-  // pinMode(measureTimePin1, OUTPUT);
-  // digitalWrite(measureTimePin1, HIGH);
-  // esp_sleep_enable_timer_wakeup(1500000); //wait one second to charge capacitor
-  // esp_light_sleep_start();
-  pinMode(measureTimePin1, OUTPUT);
-  pinMode(measureTimePin2, OUTPUT);
-  pinMode(button1, INPUT);
-  // digitalWrite(measureTimePin1, LOW);
-
+  Serial.begin(115200);
+  Serial.printf("Device is started\n");
+  //WiFi.mode(WIFI_MODE_STA);
+  //Serial.print("MAC address: ");
+  //Serial.println(WiFi.macAddress());
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
-  WiFi.mode(WIFI_STA); //Set device as a Wi-Fi Station]
-  esp_sleep_enable_timer_wakeup(1500000); //wait one second to charge capacitor
-  esp_light_sleep_start();  
-  digitalWrite(measureTimePin1, HIGH);
-  WiFi.begin(ssid, password);  
-  Serial.begin(115200);
-  Serial.println("Serial active");
-  Serial.println("overleeft");
-  //WiFi.enableAP(false);
-  //ESPnowconfig(true);
-  //WiFi.begin(ssid, password);
-  //digitalWrite(measureTimePin1, LOW);
+
+  // Set device as a Wi-Fi Station
+  WiFi.mode(WIFI_STA);
+
+  // Init ESP-NOW
+  if (esp_now_init() != ESP_OK)
+  {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+
+  // Once ESPNow is successfully Init, we will register for recv CB to
+  // get recv packer info
+  esp_now_register_recv_cb(OnDataRecv);
   while (1)
   {
-    delay(1);
+    delay(1000);
+    //esp_deep_sleep_start();
   }
-  //WiFi.disconnect(false, false);
-  // Serial.print("WiFi.setTxPower = ");
-  // Serial.println(WiFi.setTxPower(WIFI_POWER_2dBm));
-  // Serial.print("WiFi tx power: ");
-  // Serial.println(WiFi.getTxPower());
-  for (int test = 50; test > 0; test--)
-  {
-    Serial.println(test);
-    delay(200);
-  }
-  //ESPnowconfig(true);
-  //lastTimeSended = 1; //to execute function below direct
+  printf("ESPnowconfig return: %d\n", ESPnowconfig(true));
+  lastTimeSended = 1; //to execute function below direct
 }
-boolean buttonState1 = true;
 void loop()
 {
-  while (true)
-  {
-  }
   if (((millis() - lastTimeSended) > sendInterval)) // && buttonState1)
   {
     printStatics();
-    if (buttonState1)
+    //ESPnowconfig(false);
+    //WiFiconfig(true); //Serial.printf("WiFiconfig = %x", WiFiconfig(true));
+    if (WiFi.status() == WL_CONNECTED)
     {
-      //ESPnowconfig(false);
-      WiFiconfig(true); //Serial.printf("WiFiconfig = %x", WiFiconfig(true));
-      if (WiFi.status() == WL_CONNECTED)
+      if (true) //sendAction here
       {
-        if (sendToThingSpeak())
-        {
-          lastTimeSended = millis();
-        }
+        lastTimeSended = millis();
       }
-      else
-      {
-        Serial.println("WiFi Disconnected");
-      }
-      //printStatics();
-      //WiFiconfig(false);
-      //ESPnowconfig(true);
     }
+    else
+    {
+      Serial.println("WiFi Disconnected");
+    }
+    //printStatics();
+    //WiFiconfig(false);
+    //ESPnowconfig(true);
   }
-  //   if ((digitalRead(button1) == LOW))
-  //   {
-  //     byte deBounce = 0;
-  // #define deBounceThreshold 50
-  //     while (deBounce < deBounceThreshold)
-  //     {
-  //       if (digitalRead(button1) == LOW)
-  //       {
-  //         deBounce = 0;
-  //       }
-  //       else
-  //       {
-  //         deBounce++;
-  //       }
-  //       delay(1);
-  //     }
-  //     buttonState1 = !buttonState1;
-  //     Serial.printf("toggle buttonState1 to %x\n", buttonState1);
-  //   }
 }
