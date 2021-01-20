@@ -7,3 +7,5 @@
 utils.h
 
 platformio.ini
+
+src/espnow_settings.h
