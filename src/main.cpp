@@ -25,7 +25,23 @@ typedef struct ESP_message
   float pipeTemps2[maximum_samples_espnow];
 } ESP_message;
 
-ESP_message receivedMessage[maximumExternalSensors];
+//ESP_message receivedMessage[maximumExternalSensors];
+
+uint8_t externalSensors_currentPosition = 0;
+
+#define maximum_externalSensorData_positions 10
+
+typedef struct externalSensorData
+{
+  byte macID[macArrayLength];
+  uint8_t numberofMeasurements;
+  uint8_t intervalTime = defaultIntervalTime; //(INTERVAL_US / 1000000); //intervalTime in milliSeconds
+  float pipeTemps1[maximum_samples_espnow];
+  float pipeTemps2[maximum_samples_espnow];
+  uint64_t receiveTime; //receiveTime in UNIX
+} externalSensorData;
+
+externalSensorData received_externalData[maximum_externalSensorData_positions];
 
 typedef struct esp_now_message //this is how data from a node is saved
 {
@@ -51,14 +67,6 @@ struct communicationStatics //save this parameters for statics
 
 struct communicationStatics nodeStatics[maximumExternalSensors];
 
-typedef struct struct_message //this is how data is sended, REVIEW: this is possible on a different way
-{
-  int temperature1;
-  int temperature2;
-} struct_message;
-
-struct_message myData;
-
 //prototype functions
 void RollingAverage(unsigned long *avg, unsigned long *new_sample, unsigned long *numberofSamples);
 byte checkExistingMac(byte *pntToMac);
@@ -78,18 +86,50 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len)
            mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
   Serial.println(macStr);
 
-  memcpy(&receivedMessage[temp_select_device], incomingData, sizeof(receivedMessage[temp_select_device]));
+  ESP_message receive_externalData_format;
+
+  memcpy(&receive_externalData_format, incomingData, sizeof(receive_externalData_format));
+
+  received_externalData[externalSensors_currentPosition].receiveTime = (1611233085 + (externalSensors_currentPosition * 60)); //this should be the local time!
+
+  for (uint8_t counter1 = 0; counter1 < macArrayLength; counter1++) //copy mac address
+  {
+    received_externalData[externalSensors_currentPosition].macID[counter1] = mac_addr[counter1];
+  }
+
+  received_externalData[externalSensors_currentPosition].numberofMeasurements = receive_externalData_format.numberofMeasurements;
+
+  for (uint8_t counter1 = 0; counter1 < (received_externalData[externalSensors_currentPosition].numberofMeasurements); counter1++)
+  {
+    received_externalData[externalSensors_currentPosition].pipeTemps1[counter1] = receive_externalData_format.pipeTemps1[counter1];
+    received_externalData[externalSensors_currentPosition].pipeTemps2[counter1] = receive_externalData_format.pipeTemps2[counter1];
+  }
 
 #if debug_sent_ESPNOW_message
-  printf("[ESPNOW]: receivedMessage[temp_select_device].numberofMeasurements = %u\n", receivedMessage[temp_select_device].numberofMeasurements);
-  printf("[ESPNOW]: receivedMessage[temp_select_device].intervalTime = %u\n", receivedMessage[temp_select_device].intervalTime);
-  for (uint8_t counter1 = 0; counter1 < receivedMessage[temp_select_device].numberofMeasurements; counter1++)
+  printf("[ESPNOW]: externalSensors_currentPosition: %u\n", externalSensors_currentPosition);
+  Serial.print("[ESPNOW]: MACID: ");
+  char tempMacStr[18];
+  snprintf(tempMacStr, sizeof(tempMacStr), "%02x:%02x:%02x:%02x:%02x:%02x",
+           received_externalData[externalSensors_currentPosition].macID[0], received_externalData[externalSensors_currentPosition].macID[1], received_externalData[externalSensors_currentPosition].macID[2], received_externalData[externalSensors_currentPosition].macID[3], received_externalData[externalSensors_currentPosition].macID[4], received_externalData[externalSensors_currentPosition].macID[5]);
+  Serial.println(tempMacStr);
+  printf("[ESPNOW]: numberofMeasurements = %u\n", received_externalData[externalSensors_currentPosition].numberofMeasurements);
+  printf("[ESPNOW]: intervalTime = %u\n", received_externalData[externalSensors_currentPosition].intervalTime);
+  for (uint8_t counter1 = 0; counter1 < (received_externalData[externalSensors_currentPosition].numberofMeasurements); counter1++)
   {
-    printf("[ESPNOW]: receivedMessage[temp_select_device].pipeTemps1[%u] = %f\n", counter1, receivedMessage[temp_select_device].pipeTemps1[counter1]);
-    printf("[ESPNOW]: receivedMessage[temp_select_device].pipeTemps2[%u] = %f\n", counter1, receivedMessage[temp_select_device].pipeTemps2[counter1]);
+    printf("[ESPNOW]: pipeTemps1[%u] = %f\n", counter1, received_externalData[externalSensors_currentPosition].pipeTemps1[counter1]);
+    printf("[ESPNOW]: pipeTemps2[%u] = %f\n", counter1, received_externalData[externalSensors_currentPosition].pipeTemps2[counter1]);
   }
+  printf("[ESPNOW]: receiveTime = %llu\n", received_externalData[externalSensors_currentPosition].receiveTime);
   printf("[ESPNOW]: This should be the message\n");
 #endif
+  if (externalSensors_currentPosition < maximum_externalSensorData_positions)
+  {
+    externalSensors_currentPosition++;
+  }
+  else
+  {
+    printf("Memory is full, so next measurement will not be cached\n");
+  }
 
   // byte tempMac[macArrayLength] = {mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]};
 
@@ -214,6 +254,7 @@ boolean ESPnowconfig(boolean requestedState)
     {
       if (esp_now_deinit() == ESP_OK)
       {
+        WiFi.mode(WIFI_OFF);
         return true;
       }
     }
@@ -280,37 +321,24 @@ byte checkExistingMac(byte *pntToMac)
   return mac_does_not_exist;
 }
 
-boolean startRemember = false;
-
 void setup()
 {
   Serial.begin(115200);
   Serial.printf("Device is started\n");
-  //WiFi.mode(WIFI_MODE_STA);
-  //Serial.print("MAC address: ");
-  //Serial.println(WiFi.macAddress());
+  WiFi.mode(WIFI_MODE_STA);
+  Serial.print("MAC address of this gateway : ");
+  Serial.println(WiFi.macAddress());
+  WiFi.mode(WIFI_OFF);
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
 
-  // Set device as a Wi-Fi Station
-  WiFi.mode(WIFI_STA);
-
-  // Init ESP-NOW
-  if (esp_now_init() != ESP_OK)
-  {
-    Serial.println("Error initializing ESP-NOW");
-    return;
-  }
-
-  // Once ESPNow is successfully Init, we will register for recv CB to
-  // get recv packer info
-  esp_now_register_recv_cb(OnDataRecv);
   while (1)
   {
+    printf("ESPnowconfig enabled return: %d\n", ESPnowconfig(true));
     delay(1000);
-    //esp_deep_sleep_start();
+    printf("ESPnowconfig disabled return: %d\n", ESPnowconfig(false));
+    delay(1000);
   }
-  printf("ESPnowconfig return: %d\n", ESPnowconfig(true));
   lastTimeSended = 1; //to execute function below direct
 }
 void loop()
