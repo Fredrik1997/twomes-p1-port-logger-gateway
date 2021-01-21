@@ -1,0 +1,18 @@
+Change Component Footprint: Designator=LP3 Old Footprint=VLP-550-R New Footprint=VLP-650-R
+Change Component Footprint: Designator=LP4 Old Footprint=VLP-550-R New Footprint=VLP-650-R
+Change Component Comment : Designator=LP3 Old Comment=VLP-550-R New Comment=VLP-650-R
+Change Component Comment : Designator=LP4 Old Comment=VLP-550-R New Comment=VLP-650-R
+Change component parameters: Designator = "LP3" ("LP3"); Footprint = "VLP-550-R"; UniqueID = "\VUNCOJGY" ("\VUNCOJGY")
+Change component parameters (AddParameter): Name = "Case/Package"; Value = "SMD/SMT"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Manufacturer"; Value = "Bivar"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Manufacturer Part Number"; Value = "VLP-650-R"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Supplier 1"; Value = "Mouser"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Supplier Part Number 1"; Value = "749-VLP650R"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Supplier Unit Price 1"; Value = "€0.43073"; VariantName = "[No Variations]"
+Change component parameters: Designator = "LP4" ("LP4"); Footprint = "VLP-550-R"; UniqueID = "\MIPFTVKC" ("\MIPFTVKC")
+Change component parameters (AddParameter): Name = "Case/Package"; Value = "SMD/SMT"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Manufacturer"; Value = "Bivar"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Manufacturer Part Number"; Value = "VLP-650-R"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Supplier 1"; Value = "Mouser"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Supplier Part Number 1"; Value = "749-VLP650R"; VariantName = "[No Variations]"
+Change component parameters (AddParameter): Name = "Supplier Unit Price 1"; Value = "€0.43073"; VariantName = "[No Variations]"

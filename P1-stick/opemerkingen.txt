@@ -1,0 +1,3 @@
+In het mapje "Solidworks" staat de assembly van de behuizing en een .step file van de PCB
+In het mapje "case" staan alle onderdelen waaruit de assembly is opgebouwd. Ook staat hierin het equations bestand waarme bepaalde
+parameter van de behuzing kunnen worden veranderd. Denk aan breedte en hoogte.

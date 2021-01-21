@@ -1,0 +1,13 @@
+﻿"assembly_offset"= 0.3mm
+
+"case_thickness"= 1mm
+
+"case_length"= 60mm
+
+"case_width"= 70mm
+
+"case_connect_wall"= 5mm
+
+"connect_wall_assembly_offset"= 0.1mm
+
+"fillet_topbottom"= 0.8mm
