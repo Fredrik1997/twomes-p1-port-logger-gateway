@@ -20,7 +20,7 @@ unsigned long lastTimeSended = 0; //to save what time (relative to millis) the l
 typedef struct ESP_message
 {
   uint8_t numberofMeasurements;
-  uint8_t intervalTime = defaultIntervalTime; //(INTERVAL_US / 1000000); //intervalTime in milliSeconds
+  uint8_t intervalTime;
   float pipeTemps1[maximum_samples_espnow];
   float pipeTemps2[maximum_samples_espnow];
 } ESP_message;
@@ -35,7 +35,7 @@ typedef struct externalSensorData
 {
   byte macID[macArrayLength];
   uint8_t numberofMeasurements;
-  uint8_t intervalTime = defaultIntervalTime; //(INTERVAL_US / 1000000); //intervalTime in milliSeconds
+  uint8_t intervalTime;
   float pipeTemps1[maximum_samples_espnow];
   float pipeTemps2[maximum_samples_espnow];
   uint64_t receiveTime; //receiveTime in UNIX
@@ -90,7 +90,7 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len)
 
   memcpy(&receive_externalData_format, incomingData, sizeof(receive_externalData_format));
 
-  received_externalData[externalSensors_currentPosition].receiveTime = (1611233085 + (externalSensors_currentPosition * 60)); //this should be the local time!
+  received_externalData[externalSensors_currentPosition].receiveTime = (1611233085 + uint16_t(externalSensors_currentPosition * 60)); //this should be the local time!
 
   for (uint8_t counter1 = 0; counter1 < macArrayLength; counter1++) //copy mac address
   {
@@ -98,6 +98,7 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len)
   }
 
   received_externalData[externalSensors_currentPosition].numberofMeasurements = receive_externalData_format.numberofMeasurements;
+  received_externalData[externalSensors_currentPosition].intervalTime = receive_externalData_format.intervalTime;
 
   for (uint8_t counter1 = 0; counter1 < (received_externalData[externalSensors_currentPosition].numberofMeasurements); counter1++)
   {
