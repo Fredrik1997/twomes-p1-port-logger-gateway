@@ -4,4 +4,6 @@
 .vscode/launch.json
 .vscode/ipch
 
-BLE_Twomes.h
+src/BLE_Twomes.h
+src/utils.h
+src/espnow_settings.h
