@@ -1,0 +1,16 @@
+//delete .bak from filenamet use this template
+
+//User things
+#define hardcoded_BLE_name "User input here required"
+
+//connection things
+#define WIFI_PROVISIONING_SERVICE_UUID "User input here required"
+#define SSID_WIFI_CHAR_UUID"User input here required"
+#define PASSWORD_WIFI_UUID"User input here required"
+#define STATE_WIFI_UUID"User input here required"
+
+#define CONFIG_PROVISIONING_SERVICE_UUID "User input here required"
+#define UNIQUE_ID_GATEWAY_CHAR_UUID "User input here required"
+#define UNIQUE_ID_BOILER_CHAR_UUID "User input here required"
+#define UNIQUE_ID_ROOM_CHAR_UUID "User input here required"
+#define MEASURE_INTERVAL_CHAR_UUID "User input here required"
